@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>データ探偵 (Data Detective) - 統合完了版</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <!-- Chart.js CDN (グラフ描画) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- ★修正: ヒストグラムプラグインはエラーの原因となっていたため削除します -->
+    <!-- html2canvas CDN (画像ダウンロード) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        /* ステップのインジケーター */
+        .step-indicator {
+            transition: all 0.3s ease;
+            font-size: 0.7rem; /* スマホ用にさらに小さく */
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
+        }
+        @media (min-width: 768px) {
+            .step-indicator {
+                font-size: 1rem; /* PCでは元のサイズ */
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+            }
+        }
+        .step-indicator.active {
+            border-color: #3b82f6; /* border-blue-500 */
+            color: #3b82f6; /* text-blue-500 */
+            font-weight: 600;
+        }
+        .step-indicator.completed {
+            border-color: #16a34a; /* border-green-600 */
+            color: #16a34a; /* text-green-600 */
+        }
+        /* ボタンの無効化スタイル */
+        button:disabled, input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* アクティブな選択肢 */
+        input[type="radio"]:checked + label {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        /* レポートプレビュー用のスタイル */
+        .report-preview h3 {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            margin-top: 1.5rem; /* mt-6 */
+            margin-bottom: 0.5rem; /* mb-2 */
+            border-bottom: 2px solid #e5e7eb; /* border-b-2 border-gray-200 */
+            padding-bottom: 0.25rem; /* pb-1 */
+        }
+        .report-preview p {
+            font-size: 1rem; /* text-base */
+            color: #374151; /* text-gray-700 */
+            white-space: pre-wrap; /* 改行を反映 */
+            min-height: 40px;
+            background-color: #f9fafb; /* bg-gray-50 */
+            padding: 0.75rem; /* p-3 */
+            border-radius: 0.375rem; /* rounded-md */
+        }
+        .report-preview img, .report-preview canvas {
+            max-width: 100%;
+            height: auto;
+            margin-top: 0.5rem; /* mt-2 */
+            border-radius: 0.375rem; /* rounded-md */
+            border: 1px solid #d1d5db; /* border border-gray-300 */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto bg-white shadow-2xl rounded-lg overflow-hidden">
+        
+        <!-- ヘッダー -->
+        <header class="p-6 bg-gray-800 text-white">
+            <h1 class="text-3xl font-bold flex items-center">
+                <i data-lucide="search-code" class="mr-3 text-blue-400"></i>
+                データ探偵 (Data Detective)
+            </h1>
+            <p class="text-gray-300 mt-1">思考力・判断力・表現力を高めるデータ分析</p>
+        </header>
+
+        <!-- ★修正: 重複していたインジケーター(78-81行目)を削除 -->
+        <!-- ★修正: ステップインジケーターを7ステップに変更 (8を削除) -->
+        <div class="flex border-b border-gray-200">
+            <!-- ★修正: STEP 1 の文言変更 -->
+            <div id="indicator-1" class="step-indicator active flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 1:</span> テーマ
+            </div>
+            <div id="indicator-2" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 2:</span> 仮説
+            </div>
+            <div id="indicator-3" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 3:</span> 変数
+            </div>
+            <div id="indicator-4" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 4:</span> 手法
+            </div>
+            <div id="indicator-5" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 5:</span> 対応
+            </div>
+            <div id="indicator-6" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block">STEP 6:</span> 結果
+            </div>
+            <div id="indicator-7" class="step-indicator flex-1 py-4 text-center border-b-4 border-transparent">
+                <span class="hidden md:inline-block"><i data-lucide="file-text" class="inline-block w-5 h-5 mr-1"></i> 7:</span> レポート
+            </div>
+            <!-- ★削除: STEP 8 のインジケーターを削除 -->
+        </div>
+
+        <main class="p-6 md:p-8">
+
+            <!-- ★修正: STEP 1 と 2 を大幅に変更 -->
+            
+            <!-- NEW STEP 1: 探求テーマ（データ）の選択 -->
+            <div id="step-1" class="step-content">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 1: 探求テーマ（データ）の選択</h2>
+                <p class="text-gray-600 mb-6">分析してみたい「探求テーマ（データセット）」を1つ選んでください。各テーマに「含まれる主な変数」をヒントに、どんな仮説が立てられそうか考えてみましょう。</p>
+                <div id="dataset-card-container" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- データセットカードは JS でここに挿入されます -->
+                </div>
+            </div>
+
+            <!-- NEW STEP 2: 仮説の設定 -->
+            <div id="step-2" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 2: 仮説の設定</h2>
+                <div class="mb-6 bg-gray-50 p-6 rounded-lg border border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-700">選択中のテーマ: <span id="selected-dataset-name" class="text-blue-600"></span></h3>
+                    <p class="text-gray-600">含まれる変数: <span id="selected-dataset-vars" class="text-sm"></span></p>
+                </div>
+                <p class="text-gray-600 mb-6">選択したテーマの変数を使い、あなたが検証したい「仮説」を記述してください。</p>
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                    <label for="hypothesis-text" class="block text-lg font-medium text-gray-700 mb-2">あなたの仮説:</label>
+                    <textarea id="hypothesis-text" rows="6" class="w-full p-4 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg" placeholder="例：「最高気温」が高いほど、「電力消費量」も多くなるのではないか？"></textarea>
+                    
+                    <div class="mt-4">
+                        <button id="hypothesis-hint" class="text-sm text-blue-600 hover:underline">
+                            <i data-lucide="lightbulb" class="inline-block w-4 h-4 mr-1"></i>
+                            仮説のヒント（例）を表示
+                        </button>
+                    </div>
+
+                    <button id="to-step-3" class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg" disabled>
+                        仮説を確定し、変数選択へ進む
+                        <i data-lucide="arrow-right" class="w-5 h-5 ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 3: 変数マッチング (変更なし) -->
+            <div id="step-3" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 3: 変数マッチング</h2>
+                <p class="text-gray-600 mb-6">選択したデータセットから、あなたの仮説を検証するために分析したい「変数」を選択してください。</p>
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="select-x" class="block text-lg font-medium text-gray-700 mb-2">分析する変数 1 (X軸):</label>
+                            <select id="select-x" class="w-full p-4 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg">
+                                <option value="">--- X軸を選択 ---</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="select-y" class="block text-lg font-medium text-gray-700 mb-2">分析する変数 2 (Y軸): <span class="text-sm font-normal">(任意)</span></label>
+                            <select id="select-y" class="w-full p-4 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg">
+                                <option value="">--- Y軸を選択 (任意) ---</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="to-step-4" class="w-full mt-8 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg" disabled>
+                        変数を確定し、分析手法の選択へ
+                        <i data-lucide="arrow-right" class="w-5 h-5 ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 4: グラフ＆指標選択ウィザード (変更なし) -->
+            <div id="step-4" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 4: 分析手法の選択（判断力）</h2>
+                <p class="text-gray-600 mb-6">あなたの仮説と選択した変数に基づき、どのような分析手法が「最適」か**判断**して選択してください。</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 1変数分析 -->
+                    <input type="radio" name="analysis-type" id="type-1var" value="1var" class="hidden">
+                    <label for="type-1var" class="block p-6 rounded-lg border-2 border-gray-300 hover:shadow-lg transition cursor-pointer">
+                        <div class="flex items-center mb-4">
+                            <i data-lucide="bar-chart-horizontal" class="w-10 h-10 mr-4 text-blue-600"></i>
+                            <h3 class="text-2xl font-semibold text-gray-800">1変数の分布を見る</h3>
+                        </div>
+                        <p class="text-gray-600 mb-4">選択した1つの変数が、どのような値に集中し、どのように散らばっているか（分布）を調べる。</p>
+                        <h4 class="font-semibold text-gray-700">グラフ:</h4>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">ヒストグラム</span>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">箱ひげ図</span>
+                        <h4 class="font-semibold text-gray-700 mt-3">指標:</h4>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">平均値</span>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">中央値</span>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">四分位数</span>
+                    </label>
+
+                    <!-- 2変数分析 -->
+                    <input type="radio" name="analysis-type" id="type-2var" value="2var" class="hidden" disabled>
+                    <label for="type-2var" id="label-2var" class="block p-6 rounded-lg border-2 border-gray-300 hover:shadow-lg transition cursor-pointer opacity-50">
+                        <div class="flex items-center mb-4">
+                            <i data-lucide="scatter-chart" class="w-10 h-10 mr-4 text-green-600"></i>
+                            <h3 class="text-2xl font-semibold text-gray-800">2変数の関係を見る</h3>
+                        </div>
+                        <p class="text-gray-600 mb-4">選択した2つの変数の間に、どのような関係（相関）があるかを調べる。</p>
+                        <h4 class="font-semibold text-gray-700">グラフ:</h4>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">散布図</span>
+                        <h4 class="font-semibold text-gray-700 mt-3">指標:</h4>
+                        <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2">相関係数</span>
+                        <p id="label-2var-warning" class="text-sm text-gray-500 mt-4">(2つ目の変数を選択すると有効になります)</p>
+                    </label>
+                </div>
+                
+                <button id="to-step-5" class="w-full mt-8 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg" disabled>
+                    手法を確定し、データの問題点を確認
+                    <i data-lucide="arrow-right" class="w-5 h-5 ml-2"></i>
+                </button>
+            </div>
+            
+            <!-- STEP 5: 外れ値対応シミュレーター (変更なし) -->
+            <div id="step-5" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 5: 外れ値・欠損値の対応（判断力）</h2>
+                <p class="text-gray-600 mb-6">分析を実行する前に、データの問題点が自動検出されました。分析の信頼性を高めるため、これらのデータにどう対処するか**判断**してください。</p>
+                
+                <div class="bg-yellow-50 p-6 rounded-lg border border-yellow-300" id="data-issues-container">
+                    <!-- JSによって問題点がここに挿入される -->
+                </div>
+
+                <button id="to-step-6" class="w-full mt-8 bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center text-lg">
+                    この設定で分析を実行する
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 ml-2"></i>
+                </button>
+            </div>
+
+            <!-- STEP 6: 最終分析結果 (変更なし) -->
+            <div id="step-6" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 6: 最終分析結果 ＆ 解釈ガイド</h2>
+                <p class="text-gray-600 mb-6">あなたの選択と判断に基づき、分析結果が自動生成されました。下の「解釈ガイド」を参考に、結果を解釈しましょう。</p>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- グラフ表示エリア -->
+                    <div class="lg:col-span-2 bg-white p-6 rounded-lg border border-gray-200 shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4" id="chart-title">分析グラフ</h3>
+                        <canvas id="analysis-chart"></canvas>
+                    </div>
+                    <!-- 指標表示エリア -->
+                    <div class="lg:col-span-1 bg-white p-6 rounded-lg border border-gray-200 shadow-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">基本統計量</h3>
+                        <div id="stats-results" class="space-y-3">
+                            <!-- JSによって指標がここに挿入される -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 解釈ガイド (変更なし) -->
+                <div id="interpretation-guide-container" class="mt-8 bg-blue-50 p-6 rounded-lg border border-blue-200">
+                     <h3 class="text-xl font-semibold text-gray-700 mb-4">結果の解釈ガイド</h3>
+                    <div id="interpretation-guide" class="space-y-3">
+                        <!-- JSによってガイドがここに挿入される -->
+                    </div>
+                </div>
+
+
+                <!-- 分析サマリー (変更なし) -->
+                <div id="analysis-summary" class="mt-8 p-6 bg-gray-50 border-t-4 border-gray-500 rounded-b-lg">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">分析サマリー（レポート連携用）</h3>
+                    <ul class="mt-4 space-y-2 list-disc list-inside bg-white p-4 rounded-md">
+                        <li><strong>あなたの仮説:</strong> <span id="summary-hypothesis" class="font-semibold"></span></li>
+                        <li><strong>選択データセット:</strong> <span id="summary-dataset" class="font-semibold"></span></li>
+                        <li><strong>分析手法:</strong> <span id="summary-method" class="font-semibold"></span></li>
+                        <li><strong>X軸:</strong> <span id="summary-x" class="font-semibold"></span></li>
+                        <li><strong>Y軸:</strong> <span id="summary-y" class="font-semibold"></span></li>
+                        <li><strong>外れ値の対応:</strong> <span id="summary-outlier" class="font-semibold"></span></li>
+                        <li><strong>分析結果の要約:</strong> <span id="summary-stats" class="font-semibold"></span></li>
+                    </ul>
+                    <button id="to-step-7" class="w-full mt-6 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center text-lg">
+                        分析結果をレポートにまとめる
+                        <i data-lucide="arrow-right" class="w-5 h-5 ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 7 (レポート作成) (変更なし) -->
+            <div id="step-7" class="step-content hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Step 7: レポート作成（表現力）</h2>
+                <p class="text-gray-600 mb-6">分析のプロセス（PPDACサイクル）に沿って、レポートを作成します。STEP 6までの結果が自動で入力されています。</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 入力フォーム -->
+                    <div class="space-y-6">
+                        <div>
+                            <label for="reportProblem" class="block text-lg font-medium text-gray-700">1. 課題設定 (Problem)</label>
+                            <p class="text-sm text-gray-500 mb-2">何を明らかにするために分析をしましたか？（仮説から推測して記述）</p>
+                            <input type="text" id="reportProblem" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="例：高校生の勉強時間と数学の成績にはどのような関係があるか？">
+                        </div>
+                        <div>
+                            <label for="reportHypothesis" class="block text-lg font-medium text-gray-700">2. 仮説 (Plan)</label>
+                            <p class="text-sm text-gray-500 mb-2">（STEP 2で入力した仮説が自動入力されます）</p>
+                            <textarea id="reportHypothesis" rows="4" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-gray-50"></textarea>
+                        </div>
+                        <div>
+                            <label for="reportMethod" class="block text-lg font-medium text-gray-700">3. 分析手法 (Data/Analysis)</label>
+                            <p class="text-sm text-gray-500 mb-2">（STEP 1〜5の選択が自動入力されます）</p>
+                            <textarea id="reportMethod" rows="5" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-gray-50" placeholder="例：30人の生徒にアンケートを実施。勉強時間と数学のテストの点数を収集した。散布図を作成し、相関係数を計算した。"></textarea>
+                        </div>
+                         <div>
+                            <label for="reportAnalysis" class="block text-lg font-medium text-gray-700">4. 分析結果 (Analysis)</label>
+                            <p class="text-sm text-gray-500 mb-2">（STEP 6の統計量が自動入力されます）</p>
+                            <textarea id="reportAnalysis" rows="5" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-gray-50"></textarea>
+                        </div>
+                        <div>
+                            <label for="reportConclusion" class="block text-lg font-medium text-gray-700">5. 結論・考察 (Conclusion)</label>
+                            <p class="text-sm text-gray-500 mb-2">仮説は正しかったですか？STEP 6の解釈ガイドを参考に、結果から何が言えるか記述しましょう。</p>
+                            <textarea id="reportConclusion" rows="6" class="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="例：仮説の通り、勉強時間と数学の成績には強い正の相関が認められた。ただし、これが因果関係を意味するとは限らない。今後の課題として、他の要因（学習の質など）も調査する必要がある。"></textarea>
+                        </div>
+                        <button id="previewButton" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                            <i data-lucide="eye" class="w-5 h-5 mr-2"></i>
+                            レポートをプレビューする
+                        </button>
+                    </div>
+
+                    <!-- プレビューエリア -->
+                    <div id="reportPreviewContainer" class="bg-gray-50 p-6 rounded-lg border border-gray-200 h-full min-h-[600px]">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">レポートプレビュー</h3>
+                        <!-- プレビュー本体 -->
+                        <div id="reportPreview" class="report-preview bg-white p-6 rounded-md border border-gray-300 shadow-inner">
+                            <p class="text-gray-500 italic">（「プレビューする」ボタンを押すと、ここにレポートが表示されます）</p>
+                        </div>
+                        <!-- ダウンロードボタン -->
+                        <button id="downloadButton" class="w-full mt-4 bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center hidden">
+                            <i data-lucide="download" class="w-5 h-5 mr-2"></i>
+                            PNG画像としてダウンロード
+                        </button>
+                        
+                        <!-- ★削除: ピアレビューへ進むボタンを削除 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ★削除: STEP 8 (ピアレビュー) の全体を削除 -->
+
+        </main>
+        
+        <!-- ★削除: 重複していた2つ目の <main> タグ (538-844行目) を削除 -->
+
+    </div>
+
+    <script>
+    (function() {
+        // --- データハブ (Data Hub) の定義 ---
+        const DATA_HUB = {
+            tokyo_weather_energy: {
+                name: "東京の気象と電力消費量 (2024年夏)",
+                description: "2024年夏（7月・8月）の東京都における日別の気象データと、管内の電力消費量のデータセット。",
+                variables: {
+                    date: "日付",
+                    avg_temp: "平均気温 (°C)",
+                    max_temp: "最高気温 (°C)",
+                    rainfall_mm: "降水量 (mm)",
+                    energy_consumption: "電力消費量 (万kW)"
+                },
+                // ★修正: 仮説ヒントの例
+                hypothesis_hint: "（例）「最高気温」が高い日ほど、「電力消費量」も多くなるのではないか？",
+                data: [
+                    { date: "7/1", avg_temp: 25.5, max_temp: 30.1, rainfall_mm: 5.0, energy_consumption: 4200 },
+                    { date: "7/2", avg_temp: 26.8, max_temp: 32.5, rainfall_mm: 0.0, energy_consumption: 4500 },
+                    { date: "7/3", avg_temp: 28.0, max_temp: 34.2, rainfall_mm: 0.0, energy_consumption: 4850 },
+                    { date: "7/4", avg_temp: 27.5, max_temp: 33.0, rainfall_mm: 0.0, energy_consumption: 4700 },
+                    { date: "7/5", avg_temp: 29.0, max_temp: 35.1, rainfall_mm: 0.0, energy_consumption: 5000 },
+                    { date: "7/6", avg_temp: 29.2, max_temp: 34.8, rainfall_mm: 0.0, energy_consumption: 5050 },
+                    { date: "7/7", avg_temp: 26.1, max_temp: 29.5, rainfall_mm: 15.0, energy_consumption: 4100 },
+                    { date: "7/8", avg_temp: 26.5, max_temp: 31.2, rainfall_mm: 2.0, energy_consumption: 4300 },
+                    { date: "7/9", avg_temp: 27.8, max_temp: 33.5, rainfall_mm: 0.0, energy_consumption: 4750 },
+                    { date: "7/10", avg_temp: 28.4, max_temp: 34.0, rainfall_mm: 0.0, energy_consumption: 4800 },
+                    { date: "7/11", avg_temp: 29.1, max_temp: 35.5, rainfall_mm: 0.0, energy_consumption: 5150 },
+                    // ★外れ値 (ノイズ): 異常な最高気温 (入力ミス)
+                    { date: "7/12", avg_temp: 30.1, max_temp: 53.9, rainfall_mm: 0.0, energy_consumption: 5200 },
+                    { date: "7/13", avg_temp: 27.2, max_temp: 31.0, rainfall_mm: 20.5, energy_consumption: 4300 },
+                    // ★欠損値 (null): 降水量が未計測
+                    { date: "7/14", avg_temp: 28.5, max_temp: 33.8, rainfall_mm: null, energy_consumption: 4750 },
+                    { date: "7/15", avg_temp: 29.8, max_temp: 36.0, rainfall_mm: 0.0, energy_consumption: 5300 },
+                    { date: "7/16", avg_temp: 30.5, max_temp: 36.8, rainfall_mm: 0.0, energy_consumption: 5450 },
+                    { date: "7/17", avg_temp: 31.0, max_temp: 37.2, rainfall_mm: 0.0, energy_consumption: 5500 },
+                    { date: "7/18", avg_temp: 28.0, max_temp: 32.0, rainfall_mm: 10.0, energy_consumption: 4600 },
+                    // ★欠損値 (null): 電力消費量が未計測
+                    { date: "7/19", avg_temp: 29.5, max_temp: 35.0, rainfall_mm: 0.0, energy_consumption: null },
+                    { date: "7/20", avg_temp: 30.2, max_temp: 36.5, rainfall_mm: 0.0, energy_consumption: 5400 }
+                ]
+            },
+            student_survey: {
+                name: "高校生の学習と生活習慣アンケート (N=30)",
+                description: "ある高校の30人の生徒を対象に実施した、学習時間、生活習慣、通学時間、および特定のテストの成績に関するアンケート結果。",
+                variables: {
+                    student_id: "生徒ID",
+                    study_hours_week: "週の学習時間 (時間)",
+                    sleep_hours_day: "1日の平均睡眠時間 (時間)",
+                    commute_time_min: "通学時間 (分)",
+                    math_score: "数学のテスト成績 (点)"
+                },
+                // ★修正: 仮説ヒントの例
+                hypothesis_hint: "（例）「週の学習時間」が長いほど、「数学のテスト成績」は高くなるのではないか？",
+                data: [
+                    { student_id: 1, study_hours_week: 10, sleep_hours_day: 7.5, commute_time_min: 30, math_score: 75 },
+                    { student_id: 2, study_hours_week: 5, sleep_hours_day: 6.0, commute_time_min: 60, math_score: 50 },
+                    { student_id: 3, study_hours_week: 15, sleep_hours_day: 7.0, commute_time_min: 20, math_score: 85 },
+                    // ★外れ値 (ノイズ): 極端に学習時間が長い生徒
+                    { student_id: 4, study_hours_week: 40, sleep_hours_day: 5.0, commute_time_min: 45, math_score: 95 },
+                    { student_id: 5, study_hours_week: 8, sleep_hours_day: 8.0, commute_time_min: 15, math_score: 65 },
+                    // ★欠損値 (null): 成績が未提出
+                    { student_id: 6, study_hours_week: 12, sleep_hours_day: 6.5, commute_time_min: 90, math_score: null },
+                    { student_id: 7, study_hours_week: 14, sleep_hours_day: 7.0, commute_time_min: 25, math_score: 82 },
+                    { student_id: 8, study_hours_week: 7, sleep_hours_day: 6.0, commute_time_min: 70, math_score: 60 },
+                    { student_id: 9, study_hours_week: 2, sleep_hours_day: 8.5, commute_time_min: 10, math_score: 45 },
+                    { student_id: 10, study_hours_week: 18, sleep_hours_day: 6.0, commute_time_min: 50, math_score: 88 },
+                    // ★欠損値 (null): 睡眠時間が未回答
+                    { student_id: 11, study_hours_week: 9, sleep_hours_day: null, commute_time_min: 35, math_score: 70 },
+                    { student_id: 12, study_hours_week: 11, sleep_hours_day: 7.0, commute_time_min: 40, math_score: 78 },
+                    { student_id: 13, study_hours_week: 6, sleep_hours_day: 6.5, commute_time_min: 55, math_score: 55 },
+                    { student_id: 14, study_hours_week: 20, sleep_hours_day: 5.5, commute_time_min: 65, math_score: 90 },
+                    { student_id: 15, study_hours_week: 4, sleep_hours_day: 7.5, commute_time_min: 30, math_score: 48 },
+                    { student_id: 16, study_hours_week: 13, sleep_hours_day: 8.0, commute_time_min: 20, math_score: 80 },
+                    // ★外れ値 (ノイズ): 通学時間が極端に長い (入力ミス？)
+                    { student_id: 17, study_hours_week: 8, sleep_hours_day: 6.0, commute_time_min: 240, math_score: 62 },
+                    { student_id: 18, study_hours_week: 10, sleep_hours_day: 7.0, commute_time_min: 40, math_score: 77 },
+                    { student_id: 19, study_hours_week: 16, sleep_hours_day: 6.5, commute_time_min: 50, math_score: 86 },
+                    { student_id: 20, study_hours_week: 5, sleep_hours_day: 5.5, commute_time_min: 80, math_score: 52 },
+                    { student_id: 21, study_hours_week: 12, sleep_hours_day: 7.0, commute_time_min: 30, math_score: 79 },
+                    { student_id: 22, study_hours_week: 9, sleep_hours_day: 7.5, commute_time_min: 25, math_score: 73 },
+                    { student_id: 23, study_hours_week: 7, sleep_hours_day: 6.5, commute_time_min: 45, math_score: 63 },
+                    // ★外れ値 (ノイズ): 成績が極端に低い (0点)
+                    { student_id: 24, study_hours_week: 10, sleep_hours_day: 6.0, commute_time_min: 60, math_score: 0 },
+                    { student_id: 25, study_hours_week: 14, sleep_hours_day: 7.0, commute_time_min: 35, math_score: 83 },
+                    { student_id: 26, study_hours_week: 19, sleep_hours_day: 5.0, commute_time_min: 50, math_score: 92 },
+                    { student_id: 27, study_hours_week: 6, sleep_hours_day: 8.0, commute_time_min: 15, math_score: 58 },
+                    { student_id: 28, study_hours_week: 1, sleep_hours_day: 7.0, commute_time_min: 60, math_score: 35 },
+                    { student_id: 29, study_hours_week: 11, sleep_hours_day: 6.5, commute_time_min: 40, math_score: 76 },
+                    { student_id: 30, study_hours_week: 3, sleep_hours_day: 7.0, commute_time_min: 50, math_score: 40 }
+                ]
+            },
+            pro_baseball_stats: {
+                name: "プロ野球チームの年俸と成績 (2023年)",
+                description: "日本のプロ野球12球団の2023年シーズンにおける、チームの総年俸（推定）とシーズン成績のデータセット。",
+                variables: {
+                    team_name: "球団名",
+                    team_payroll_yen: "チーム総年俸 (億円)",
+                    team_wins: "勝利数",
+                    home_attendance: "主催試合の観客動員数 (万人)",
+                    team_era: "チーム防御率"
+                },
+                // ★修正: 仮説ヒントの例
+                hypothesis_hint: "（例）「チーム総年俸」が高いほど、「勝利数」も多いのではないか？",
+                data: [
+                    { team_name: "A", team_payroll_yen: 50.5, team_wins: 85, home_attendance: 310, team_era: 2.85 },
+                    { team_name: "B", team_payroll_yen: 45.2, team_wins: 80, home_attendance: 290, team_era: 3.10 },
+                    { team_name: "C", team_payroll_yen: 38.0, team_wins: 75, home_attendance: 270, team_era: 3.30 },
+                    // ★外れ値 (高年俸・低成績)
+                    { team_name: "D", team_payroll_yen: 60.1, team_wins: 70, home_attendance: 280, team_era: 3.85 }, 
+                    { team_name: "E", team_payroll_yen: 25.5, team_wins: 68, home_attendance: 220, team_era: 3.50 },
+                    { team_name: "F", team_payroll_yen: 30.0, team_wins: 65, home_attendance: 230, team_era: 3.70 },
+                    { team_name: "G", team_payroll_yen: 22.0, team_wins: 60, home_attendance: 190, team_era: 4.05 },
+                    { team_name: "H", team_payroll_yen: 48.0, team_wins: 78, home_attendance: 300, team_era: 3.00 },
+                    { team_name: "I", team_payroll_yen: 35.5, team_wins: 72, home_attendance: 265, team_era: 3.40 },
+                    { team_name: "J", team_payroll_yen: 28.0, team_wins: 63, home_attendance: 210, team_era: 3.90 },
+                    // ★欠損値 (null): 観客動員数が非公開
+                    { team_name: "K", team_payroll_yen: 20.0, team_wins: 55, home_attendance: null, team_era: 4.20 },
+                    { team_name: "L", team_payroll_yen: 24.5, team_wins: 58, home_attendance: 200, team_era: 4.15 }
+                ]
+            }
+        };
+
+        // --- DOM要素の取得 ---
+        const steps = [
+            document.getElementById('step-1'),
+            document.getElementById('step-2'),
+            document.getElementById('step-3'),
+            document.getElementById('step-4'),
+            document.getElementById('step-5'),
+            document.getElementById('step-6'),
+            document.getElementById('step-7')
+            // ★削除: step-8 を削除
+        ];
+        const indicators = [
+            document.getElementById('indicator-1'),
+            document.getElementById('indicator-2'),
+            document.getElementById('indicator-3'),
+            document.getElementById('indicator-4'),
+            document.getElementById('indicator-5'),
+            document.getElementById('indicator-6'),
+            document.getElementById('indicator-7')
+            // ★削除: indicator-8 を削除
+        ];
+        
+        // ★修正: Step 1
+        const datasetCardContainer = document.getElementById('dataset-card-container');
+        
+        // ★修正: Step 2
+        const hypothesisText = document.getElementById('hypothesis-text');
+        const toStep3Button = document.getElementById('to-step-3'); // to-step-2 から変更
+        const selectedDatasetName = document.getElementById('selected-dataset-name');
+        const selectedDatasetVars = document.getElementById('selected-dataset-vars');
+        const hypothesisHintButton = document.getElementById('hypothesis-hint');
+        
+        // Step 3
+        const selectX = document.getElementById('select-x');
+        const selectY = document.getElementById('select-y');
+        const toStep4Button = document.getElementById('to-step-4');
+
+        // Step 4
+        const analysisType1Var = document.getElementById('type-1var');
+        const analysisType2Var = document.getElementById('type-2var');
+        const label2Var = document.getElementById('label-2var');
+        const label2VarWarning = document.getElementById('label-2var-warning');
+        const toStep5Button = document.getElementById('to-step-5');
+
+        // Step 5
+        const dataIssuesContainer = document.getElementById('data-issues-container');
+        const toStep6Button = document.getElementById('to-step-6');
+
+        // Step 6
+        const chartTitle = document.getElementById('chart-title');
+        const analysisChartCanvas = document.getElementById('analysis-chart');
+        const statsResults = document.getElementById('stats-results');
+        const interpretationGuide = document.getElementById('interpretation-guide'); 
+        const toStep7Button = document.getElementById('to-step-7'); 
+        let analysisChartInstance = null;
+
+        // Step 6 Summary
+        const summaryHypothesis = document.getElementById('summary-hypothesis');
+        const summaryDataset = document.getElementById('summary-dataset');
+        const summaryMethod = document.getElementById('summary-method');
+        const summaryX = document.getElementById('summary-x');
+        const summaryY = document.getElementById('summary-y');
+        const summaryOutlier = document.getElementById('summary-outlier');
+        const summaryStats = document.getElementById('summary-stats'); 
+
+        // Step 7
+        const reportProblem = document.getElementById('reportProblem');
+        const reportHypothesis = document.getElementById('reportHypothesis');
+        const reportMethod = document.getElementById('reportMethod');
+        const reportAnalysis = document.getElementById('reportAnalysis');
+        const reportConclusion = document.getElementById('reportConclusion');
+        const previewButton = document.getElementById('previewButton');
+        const previewArea = document.getElementById('reportPreview');
+        const downloadButton = document.getElementById('downloadButton');
+        // ★削除: toStep8Button を削除
+        // const toStep8Button = document.getElementById('to-step-8');
+
+        // ★削除: Step 8 の変数を削除
+        // const reviewForm = document.getElementById('reviewForm');
+        // const submitMessage = document.getElementById('submitMessage');
+
+        
+        // --- 状態管理用変数 ---
+        let currentStep = 0;
+        let currentHypothesis = "";
+        let selectedDatasetKey = "";
+        let selectedXKey = "";
+        let selectedYKey = "";
+        let selectedAnalysisType = ""; // "1var" or "2var"
+        let outlierIndices = [];
+        let nullIndices = [];
+        let currentStatsSummary = ""; 
+
+        // --- ステップ遷移関数 ---
+        function goToStep(stepIndex) {
+            steps.forEach((step, index) => {
+                if (index === stepIndex) {
+                    step.classList.remove('hidden');
+                } else {
+                    step.classList.add('hidden');
+                }
+            });
+            
+            indicators.forEach((indicator, index) => {
+                indicator.classList.remove('active', 'completed');
+                if (index < stepIndex) {
+                    indicator.classList.add('completed');
+                } else if (index === stepIndex) {
+                    indicator.classList.add('active');
+                }
+            });
+            currentStep = stepIndex;
+
+            // Step 7 に入るときにフォームに自動入力
+            if (stepIndex === 6) { // STEP 7 (index 6)
+                populateReportForm();
+            }
+        }
+
+        // --- ★修正: イベントリスナー (Step 1) ---
+        function populateDatasetCards() {
+            datasetCardContainer.innerHTML = '';
+            Object.keys(DATA_HUB).forEach(key => {
+                const dataset = DATA_HUB[key];
+                // IDや日付を除いた分析可能な変数（項目名）のみをリストアップ
+                const analysisVars = Object.keys(dataset.variables)
+                    .filter(k => k !== 'date' && k !== 'student_id' && k !== 'team_name')
+                    .map(k => dataset.variables[k]);
+
+                const card = document.createElement('div');
+                card.className = 'p-6 rounded-lg border-2 border-gray-300 hover:shadow-lg transition cursor-pointer hover:border-blue-500';
+                card.dataset.key = key;
+                card.innerHTML = `
+                    <div class="flex items-center mb-4">
+                        <i data-lucide="${key === 'tokyo_weather_energy' ? 'cloud-sun' : (key === 'student_survey' ? 'pencil' : 'bar-chart-2')}" class="w-10 h-10 mr-4 text-blue-600"></i>
+                        <h3 class="text-xl font-semibold text-gray-800">${dataset.name}</h3>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4">${dataset.description}</p>
+                    <h4 class="font-semibold text-gray-700 text-sm">含まれる主な変数:</h4>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        ${analysisVars.map(v => `<span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-xs font-semibold text-gray-700">${v}</span>`).join('')}
+                    </div>
+                `;
+                // カードクリック時の動作
+                card.addEventListener('click', () => {
+                    selectedDatasetKey = key;
+                    summaryDataset.textContent = dataset.name;
+                    
+                    // STEP 2 の情報を更新
+                    selectedDatasetName.textContent = dataset.name;
+                    selectedDatasetVars.textContent = analysisVars.join('、');
+                    hypothesisText.placeholder = dataset.hypothesis_hint || "（例）「変数A」と「変数B」には関係があるのではないか？";
+                    hypothesisText.value = ""; // テキストエリアをリセット
+                    toStep3Button.disabled = true; // 仮説が入力されるまで無効
+
+                    // STEP 3 のドロップダウンを構築
+                    populateVariableSelectors();
+                    
+                    // STEP 2 へ移動
+                    goToStep(1);
+                });
+                datasetCardContainer.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+
+        // --- ★修正: イベントリスナー (Step 2) ---
+        hypothesisText.addEventListener('input', () => {
+            toStep3Button.disabled = hypothesisText.value.trim().length <= 5;
+        });
+        hypothesisHintButton.addEventListener('click', () => {
+            if (selectedDatasetKey && DATA_HUB[selectedDatasetKey].hypothesis_hint) {
+                hypothesisText.value = DATA_HUB[selectedDatasetKey].hypothesis_hint;
+                toStep3Button.disabled = false;
+            }
+        });
+        toStep3Button.addEventListener('click', () => {
+            currentHypothesis = hypothesisText.value.trim();
+            summaryHypothesis.textContent = currentHypothesis;
+            goToStep(2); // STEP 3 (index 2) へ
+        });
+
+
+        // --- イベントリスナー (Step 3) ---
+        selectX.addEventListener('change', () => {
+            selectedXKey = selectX.value;
+            summaryX.textContent = selectedXKey ? DATA_HUB[selectedDatasetKey].variables[selectedXKey] : '未選択';
+            checkStep3ButtonState();
+            checkStep4Availability(); // Step 4 のラジオボタンの状態を更新
+        });
+        selectY.addEventListener('change', () => {
+            selectedYKey = selectY.value;
+            summaryY.textContent = selectedYKey ? DATA_HUB[selectedDatasetKey].variables[selectedYKey] : '未選択';
+            checkStep3ButtonState();
+            checkStep4Availability(); // Step 4 のラジオボタンの状態を更新
+        });
+        toStep4Button.addEventListener('click', () => {
+            goToStep(3);
+        });
+
+        // --- イベントリスナー (Step 4) ---
+        analysisType1Var.addEventListener('change', () => {
+            selectedAnalysisType = '1var';
+            summaryMethod.textContent = '1変数の分布';
+            toStep5Button.disabled = false;
+        });
+        analysisType2Var.addEventListener('change', () => {
+            selectedAnalysisType = '2var';
+            summaryMethod.textContent = '2変数の関係';
+            toStep5Button.disabled = false;
+        });
+        toStep5Button.addEventListener('click', () => {
+            // データの問題点をチェックして Step 5 を構築
+            buildStep5();
+        });
+
+        // --- イベントリスナー (Step 5) ---
+        toStep6Button.addEventListener('click', () => {
+            // Step 5 での選択を読み取り、分析を実行
+            runAnalysis();
+            goToStep(5);
+        });
+
+        // --- イベントリスナー (Step 6) ---
+        toStep7Button.addEventListener('click', () => {
+            goToStep(6); // STEP 7 (index 6) へ
+        });
+
+
+        // --- イベントリスナー (Step 7) ---
+        previewButton.addEventListener('click', function() {
+            const problem = reportProblem.value.trim() || "（未入力）";
+            const hypothesis = reportHypothesis.value.trim() || "（未入力）";
+            const method = reportMethod.value.trim() || "（未入力）";
+            const analysis = reportAnalysis.value.trim() || "（未入力）";
+            const conclusion = reportConclusion.value.trim() || "（未入力）";
+            
+            previewArea.innerHTML = `
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">${problem}</h2>
+                
+                <h3>1. 課題設定</h3>
+                <p>${problem}</p>
+                
+                <h3>2. 仮説</h3>
+                <p>${hypothesis}</p>
+                
+                <h3>3. 分析手法</h3>
+                <p>${method}</p>
+                
+                <h3>4. 分析結果</h3>
+                <!-- STEP 6で描画されたグラフをコピーして表示 -->
+                <canvas id="reportCanvas"></canvas>
+                <p>${analysis}</p>
+                
+                <h3>5. 結論・考察</h3>
+                <p>${conclusion}</p>
+            `;
+
+            // STEP 6のグラフ(analysisChartCanvas)をSTEP 7のグラフ(reportCanvas)にコピー
+            const reportCanvas = document.getElementById('reportCanvas');
+            if (analysisChartInstance && reportCanvas) {
+                // Report CanvasにChart.jsのグラフを再構築
+                new Chart(reportCanvas, analysisChartInstance.config);
+            } else {
+                // グラフがない場合はプレースホルダー
+                reportCanvas.style.display = 'none';
+                const placeholder = document.createElement('img');
+                placeholder.src = "https://placehold.co/600x400/e2e8f0/cbd5e1?text=分析結果グラフなし";
+                placeholder.alt = "分析結果のグラフ";
+                placeholder.className = "my-3 w-full";
+                previewArea.querySelector('h3:nth-of-type(4)').after(placeholder);
+            }
+
+            // ダウンロードボタンを表示
+            downloadButton.classList.remove('hidden');
+        });
+
+        downloadButton.addEventListener('click', () => {
+            html2canvas(document.getElementById('reportPreview'), {
+                useCORS: true,
+                backgroundColor: '#ffffff', 
+                scale: 2 // 解像度を2倍に
+            }).then(canvas => {
+                const imageData = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = imageData;
+                link.download = 'data_detective_report.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        });
+        
+        // ★削除: toStep8Button のイベントリスナーを削除
+        // toStep8Button.addEventListener('click', () => {
+        //     goToStep(7); // STEP 8 (index 7) へ
+        // });
+
+        // ★削除: Step 8 のイベントリスナーを削除
+        // reviewForm.addEventListener('submit', function(e) { ... });
+
+        // --- ★削除: 補助関数 (Step 2) ---
+        /* * (populateDatasetSelect と updateDatasetDescription は 
+        * STEP 1 の populateDatasetCards に統合されたため不要) 
+        */
+
+
+        // --- 補助関数 (Step 3) ---
+        function populateVariableSelectors() {
+            const dataset = DATA_HUB[selectedDatasetKey];
+            if (!dataset) return;
+
+            resetVariableSelectors(); // いったんリセット
+
+            for (const key in dataset.variables) {
+                // IDや日付などは除外
+                if (key === 'date' || key === 'student_id' || key === 'team_name') {
+                    continue;
+                }
+                const optionX = document.createElement('option');
+                optionX.value = key;
+                optionX.textContent = dataset.variables[key];
+                selectX.appendChild(optionX);
+
+                const optionY = document.createElement('option');
+                optionY.value = key;
+                optionY.textContent = dataset.variables[key];
+                selectY.appendChild(optionY);
+            }
+        }
+        function resetVariableSelectors() {
+            selectX.innerHTML = '<option value="">--- X軸を選択 ---</option>';
+            selectY.innerHTML = '<option value="">--- Y軸を選択 (任意) ---</option>';
+            selectedXKey = "";
+            selectedYKey = "";
+            summaryX.textContent = "未選択";
+            summaryY.textContent = "未選択";
+        }
+        function checkStep3ButtonState() {
+            // Step 3 のボタンは、X軸が選択されていれば有効
+            // XとYが同じ場合も無効にする
+            if (selectedXKey && (selectedXKey !== selectedYKey)) {
+                toStep4Button.disabled = false;
+            } else {
+                toStep4Button.disabled = true;
+                // Xが選択されていてもYが同じだと無効になるので、Yが同じ場合はYをリセット
+                if (selectedXKey && selectedXKey === selectedYKey) {
+                    selectY.value = "";
+                    selectedYKey = "";
+                    summaryY.textContent = "未選択";
+                    checkStep4Availability(); // Step 4 も更新
+                }
+            }
+        }
+
+        // --- 補助関数 (Step 4) ---
+        function checkStep4Availability() {
+            // Y軸が選択されている場合のみ、2変数分析を有効化
+            if (selectedYKey) {
+                analysisType2Var.disabled = false;
+                label2Var.classList.remove('opacity-50');
+                label2VarWarning.classList.add('hidden');
+            } else {
+                analysisType2Var.disabled = true;
+                analysisType2Var.checked = false; // 選択をリセット
+                label2Var.classList.add('opacity-50');
+                label2VarWarning.classList.remove('hidden');
+                
+                // もし2変数が選択されていたらリセット
+                if (selectedAnalysisType === '2var') {
+                    selectedAnalysisType = '';
+                    toStep5Button.disabled = true;
+                }
+            }
+        }
+
+        // --- データ処理・統計関数 ---
+
+        // データセットから指定されたキーの配列を取得 (nullを含む)
+        function getRawData(variableKey) {
+            if (!selectedDatasetKey || !variableKey) return [];
+            return DATA_HUB[selectedDatasetKey].data.map(row => row[variableKey]);
+        }
+
+        // IQR法で外れ値のインデックスを検出 (nullは無視)
+        function findOutliersIQR(data) {
+            const sortedData = data.filter(d => d !== null).sort((a, b) => a - b);
+            if (sortedData.length < 4) return []; // データが少なすぎる
+            
+            const q1 = sortedData[Math.floor(sortedData.length * 0.25)];
+            const q3 = sortedData[Math.floor(sortedData.length * 0.75)];
+            const iqr = q3 - q1;
+            const lowerBound = q1 - 1.5 * iqr;
+            const upperBound = q3 + 1.5 * iqr;
+
+            let outlierIndices = [];
+            data.forEach((value, index) => {
+                if (value !== null && (value < lowerBound || value > upperBound)) {
+                    outlierIndices.push(index);
+                }
+            });
+            return outlierIndices;
+        }
+
+        // 欠損値(null)のインデックスを検出
+        function findNulls(data) {
+            let nullIndices = [];
+            data.forEach((value, index) => {
+                if (value === null) {
+                    nullIndices.push(index);
+                }
+            });
+            return nullIndices;
+        }
+
+        // データをクリーンにする (nullと指定された外れ値インデックスを除外)
+        function cleanData(data, indicesToExclude) {
+            return data.filter((value, index) => {
+                return value !== null && !indicesToExclude.includes(index);
+            });
+        }
+
+        // 2変数のデータをクリーンにする (ペアでnullや外れ値を除外)
+        function cleanDataPair(dataX, dataY, indicesToExclude) {
+            let cleanX = [];
+            let cleanY = [];
+            for (let i = 0; i < dataX.length; i++) {
+                if (dataX[i] !== null && dataY[i] !== null && !indicesToExclude.includes(i)) {
+                    cleanX.push(dataX[i]);
+                    // ★★★ バグ修正 ★★★
+                    cleanY.push(dataY[i]); // 修正
+                }
+            }
+            return { x: cleanX, y: cleanY };
+        }
+
+        // 基本統計量を計算
+        function calculateBasicStats(data) {
+            if (data.length === 0) return { n: 0, mean: 0, median: 0, q1: 0, q3: 0, min: 0, max: 0, stdDev: 0 };
+            const sortedData = [...data].sort((a, b) => a - b);
+            const n = data.length;
+            const mean = data.reduce((a, b) => a + b, 0) / n;
+            const median = sortedData[Math.floor(n / 2)];
+            const q1 = sortedData[Math.floor(n * 0.25)];
+            const q3 = sortedData[Math.floor(n * 0.75)];
+            const min = sortedData[0];
+            const max = sortedData[n - 1];
+            // 標本分散 (n-1) に変更 (より一般的)
+            const variance = data.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1); 
+            const stdDev = Math.sqrt(variance);
+
+            return { n, mean, median, q1, q3, min, max, stdDev };
+        }
+
+        // 相関係数を計算
+        function calculateCorrelation(dataX, dataY) {
+            if (dataX.length !== dataY.length || dataX.length === 0) return { r: 0, n: 0 };
+            const n = dataX.length;
+            const meanX = dataX.reduce((a, b) => a + b, 0) / n;
+            const meanY = dataY.reduce((a, b) => a + b, 0) / n;
+            
+            let sumXY = 0;
+            let sumX2 = 0;
+            let sumY2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                const devX = dataX[i] - meanX;
+                const devY = dataY[i] - meanY;
+                sumXY += devX * devY;
+                sumX2 += devX * devX;
+                sumY2 += devY * devY;
+            }
+            const denominator = Math.sqrt(sumX2) * Math.sqrt(sumY2);
+            const r = (denominator === 0) ? 0 : sumXY / denominator;
+            return { r, n };
+        }
+
+        // ★修正: ヒストグラムのビニング（区間分け）を自前で計算する関数
+        function generateHistogramData(data, stats, numBins = 10) {
+            if (data.length === 0) return { labels: [], counts: [] };
+            
+            const min = stats.min;
+            const max = stats.max;
+            // Handle edge case where min === max
+            if (min === max) {
+                return { labels: [`${min}`], counts: [data.length] };
+            }
+
+            // binWidthを計算 (max - min が 0 にならないように)
+            const range = max - min;
+            // 0除算を避けるため、rangeが0の場合はデフォルトの幅を設定（通常はmin===maxで処理されるが念のため）
+            const binWidth = range > 0 ? range / numBins : 1;
+            const bins = new Array(numBins).fill(0);
+            const labels = []; // <-- ★修正: `labels` はここで宣言
+
+            for (let i = 0; i < numBins; i++) {
+                const binStart = min + i * binWidth;
+                const binEnd = binStart + binWidth;
+                // 最後のビンのラベルを調整
+                if (i === numBins - 1) {
+                    labels.push(`${binStart.toFixed(1)} - ${max.toFixed(1)}`);
+                } else {
+                    labels.push(`${binStart.toFixed(1)} - ${binEnd.toFixed(1)}`);
+                }
+            }
+            
+            // ★修正: 以下のロジックが SyntaxError の修正で削除されていたため、
+            // 適切な場所 (return の前) に追加し直します。
+            for (const value of data) {
+                let binIndex = Math.floor((value - min) / binWidth);
+                
+                // 最大値が最後のビンに正しく入るようにする
+                if (value === max) {
+                    binIndex = numBins - 1;
+                }
+                
+                if (binIndex >= 0 && binIndex < numBins) {
+                    bins[binIndex]++;
+                }
+            }
+            
+            return { labels: labels, counts: bins };
+
+            /* ★修正: SyntaxError の原因だった、以下の誤ってコピーされたブロックを削除
+            interpretationGuide.innerHTML = ...
+            lucide.createIcons();
+            const { labels, counts } = generateHistogramData(data, stats, 10); 
+            analysisChartInstance = new Chart(analysisChartCanvas, { ... });
+            */
+        }
+
+
+        // --- 補助関数 (Step 5) ---
+        function buildStep5() {
+            const dataX = getRawData(selectedXKey);
+            const dataY = selectedYKey ? getRawData(selectedYKey) : [];
+
+            let allIndices = new Set();
+            let allNulls = new Set();
+            let html = '';
+
+            // X軸のチェック
+            const outliersX = findOutliersIQR(dataX);
+            const nullsX = findNulls(dataX);
+            outliersX.forEach(i => allIndices.add(i));
+            nullsX.forEach(i => allNulls.add(i));
+
+            // Y軸のチェック (2変数分析の場合)
+            if (selectedAnalysisType === '2var' && selectedYKey) {
+                const outliersY = findOutliersIQR(dataY);
+                const nullsY = findNulls(dataY);
+                outliersY.forEach(i => allIndices.add(i));
+                nullsY.forEach(i => allNulls.add(i));
+            }
+            
+            outlierIndices = Array.from(allIndices);
+            nullIndices = Array.from(allNulls);
+
+            // 問題がない場合、Step 5 をスキップ
+            if (outlierIndices.length === 0 && nullIndices.length === 0) {
+                summaryOutlier.textContent = "問題なし (そのまま使用)";
+                runAnalysis(); // そのまま分析実行
+                goToStep(5);
+                return;
+            }
+
+            // 問題がある場合、Step 5 を構築
+            if (nullIndices.length > 0) {
+                html += `
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                        <i data-lucide="help-circle" class="inline-block w-5 h-5 mr-1 text-gray-500"></i>
+                        欠損値 (null) が ${nullIndices.length} 件見つかりました
+                    </h3>
+                    <p class="text-gray-700 mb-4">欠損値は、統計の信頼性を下げるため、分析からは自動的に除外されます。</p>
+                `;
+            }
+
+            if (outlierIndices.length > 0) {
+                const outliersX = findOutliersIQR(dataX); // Xの外れ値だけ
+                const outlierValuesX = outliersX.map(i => dataX[i]).join(', ');
+                let outlierValuesY = '';
+                if (selectedAnalysisType === '2var' && selectedYKey) {
+                     const outliersY = findOutliersIQR(dataY); // Yの外れ値だけ
+                     outlierValuesY = outliersY.map(i => dataY[i]).join(', ');
+                }
+
+                html += `
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2 mt-6">
+                        <i data-lucide="alert-triangle" class="inline-block w-5 h-5 mr-1 text-red-500"></i>
+                        外れ値の可能性 が ${outlierIndices.length} 件見つかりました
+                    </h3>
+                    <p class="text-gray-700 mb-4">外れ値は、平均値や相関係数に大きな影響を与える可能性があります。これらを除外して分析することもできます。</p>
+                    <div class="p-3 bg-white rounded border border-gray-300 text-sm">
+                        <p>検出された値 (X軸): <span class="font-bold text-red-600">${outlierValuesX || 'なし'}</span></p>
+                        ${outlierValuesY ? `<p>検出された値 (Y軸): <span class="font-bold text-red-600">${outlierValuesY}</span></p>` : ''}
+                    </div>
+                    <div class="mt-4 space-y-2">
+                        <label class="block"><input type="radio" name="outlier-handling" value="keep" class="mr-2" checked> そのまま使用する (外れ値もデータとして分析に含める)</label>
+                        <label class="block"><input type="radio" name="outlier-handling" value="exclude" class="mr-2"> 除外する (これらの ${outlierIndices.length} 件を分析から除外する)</label>
+                    </div>
+                `;
+            }
+
+            dataIssuesContainer.innerHTML = html;
+            lucide.createIcons();
+            goToStep(4); // Step 5 (index 4) へ
+        }
+
+        // --- 補助関数 (Step 6) ---
+        function runAnalysis() {
+            // Step 5 の設定を取得
+            const outlierHandling = document.querySelector('input[name="outlier-handling"]:checked')?.value || 'keep';
+            const indicesToExclude = (outlierHandling === 'exclude') ? outlierIndices : [];
+            
+            summaryOutlier.textContent = (outlierHandling === 'exclude') ? `外れ値 ${indicesToExclude.length} 件を除外` : "そのまま使用";
+
+            // グラフをクリア
+            if (analysisChartInstance) {
+                analysisChartInstance.destroy();
+            }
+            statsResults.innerHTML = ''; // 指標をクリア
+            interpretationGuide.innerHTML = ''; // 解釈ガイドをクリア
+
+            if (selectedAnalysisType === '1var') {
+                run1VarAnalysis(indicesToExclude);
+            } else if (selectedAnalysisType === '2var') {
+                run2VarAnalysis(indicesToExclude);
+            }
+        }
+
+        // 1変数分析の実行
+        function run1VarAnalysis(indicesToExclude) {
+            const rawData = getRawData(selectedXKey);
+            const data = cleanData(rawData, indicesToExclude.concat(nullIndices));
+            const stats = calculateBasicStats(data);
+            const label = DATA_HUB[selectedDatasetKey].variables[selectedXKey];
+            currentStatsSummary = `データ数(n)=${stats.n}, 平均値=${stats.mean.toFixed(2)}, 中央値=${stats.median.toFixed(2)}, 標準偏差=${stats.stdDev.toFixed(2)}`;
+            summaryStats.textContent = currentStatsSummary;
+
+            chartTitle.textContent = `${label} のヒストグラム`;
+            statsResults.innerHTML = `
+                <div class="p-3 bg-gray-100 rounded"><strong>データ数 (n):</strong> ${stats.n} 件</div>
+                <div class="p-3 bg-gray-50 rounded"><strong>平均値:</strong> ${stats.mean.toFixed(2)}</div>
+                <div class="p-3 bg-gray-100 rounded"><strong>中央値 (Q2):</strong> ${stats.median.toFixed(2)}</div>
+                <div class="p-3 bg-gray-50 rounded"><strong>標準偏差:</strong> ${stats.stdDev.toFixed(2)}</div>
+                <div class="p-3 bg-gray-100 rounded"><strong>最小値:</strong> ${stats.min.toFixed(2)}</div>
+                <div class="p-3 bg-gray-50 rounded"><strong>第1四分位数 (Q1):</strong> ${stats.q1.toFixed(2)}</div>
+                <div class="p-3 bg-gray-100 rounded"><strong>第3四分位数 (Q3):</strong> ${stats.q3.toFixed(2)}</div>
+                <div class="p-3 bg-gray-50 rounded"><strong>最大値:</strong> ${stats.max.toFixed(2)}</div>
+            `;
+            
+            // 1変数解釈ガイド
+            let interpretation = `データは${stats.min.toFixed(2)}から${stats.max.toFixed(2)}の範囲に分布しています。`;
+            let caution = "";
+            // 標準偏差が0（全データが同じ値）の場合の分岐
+            if (stats.stdDev === 0 || !isFinite(stats.stdDev)) {
+                interpretation += ` 全てのデータが ${stats.mean.toFixed(2)} という同じ値です。`;
+                caution = "データにばらつきがないため、分布を分析する意味はあまりありません。";
+            } else if (Math.abs(stats.mean - stats.median) > stats.stdDev * 0.3) { // 平均と中央値の乖離が大きい場合
+                interpretation += ` 平均値(${stats.mean.toFixed(2)})と中央値(${stats.median.toFixed(2)})に差があり、データが左右対称でない（歪んでいる）可能性が示唆されます。`;
+                caution = "データが歪んでいる場合、代表値として中央値（または最頻値）を使う方が適している場合があります。";
+            } else {
+                interpretation += ` 平均値(${stats.mean.toFixed(2)})と中央値(${stats.median.toFixed(2)})が近く、データは比較的左右対称に近い分布である可能性があります。`;
+                caution = "ヒストグラムの「山」がいくつあるか（単峰性・多峰性）も確認し、データに複数の集団が混ざっていないか確認しましょう。";
+            }
+            
+            interpretationGuide.innerHTML = `
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-700 flex items-center"><i data-lucide="ruler" class="w-5 h-5 mr-2 text-blue-500"></i> 数学的な表現</h4>
+                    <p class="text-gray-600">${label}の平均値は ${stats.mean.toFixed(2)}、中央値は ${stats.median.toFixed(2)}、標準偏差は ${stats.stdDev.toFixed(2)} です。</p>
+                </div>
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-700 flex items-center"><i data-lucide="book-open" class="w-5 h-5 mr-2 text-green-500"></i> 現実的な解釈</h4>
+                    <p class="text-gray-600">${interpretation}</p>
+                </div>
+                <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200 shadow-sm">
+                    <h4 class="font-semibold text-yellow-800 flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-2 text-yellow-600"></i> 解釈の注意点</h4>
+                    <p class="text-yellow-700">${caution}</p>
+                </div>
+            `;
+            lucide.createIcons();
+
+            // ★修正: ヒストグラムプラグインの代わりに、barチャートで自前実装
+            // 1. ヒストグラムのデータを生成
+            const { labels, counts } = generateHistogramData(data, stats, 10);
+
+            // ヒストグラムを描画 (barチャートとして)
+            analysisChartInstance = new Chart(analysisChartCanvas, {
+                type: 'bar', // ★ 'histogram' から 'bar' に変更
+                data: {
+                    labels: labels, // ★ ビンのラベル
+                    datasets: [{
+                        label: label,
+                        data: counts, // ★ ビンの度数
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1,
+                        barPercentage: 1.0, // ★ バー同士をくっつける
+                        categoryPercentage: 1.0, // ★ バー同士をくっつける
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    backgroundColor: 'white', // ★背景を白に
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: label },
+                            ticks: {
+                                maxRotation: 70, // ラベルが長い場合に備えて回転
+                                minRotation: 30,
+                                font: { size: 10 } // ラベルが重ならないようにフォントを小さく
+                            }
+                        },
+                        y: { 
+                            title: { display: true, text: '度数（件数）' }, 
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0 // Y軸は整数に
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2変数分析の実行
+        function run2VarAnalysis(indicesToExclude) {
+            const rawDataX = getRawData(selectedXKey);
+            const rawDataY = getRawData(selectedYKey);
+            const { x, y } = cleanDataPair(rawDataX, rawDataY, indicesToExclude.concat(nullIndices));
+            const stats = calculateCorrelation(x, y);
+            const labelX = DATA_HUB[selectedDatasetKey].variables[selectedXKey];
+            const labelY = DATA_HUB[selectedDatasetKey].variables[selectedYKey];
+            currentStatsSummary = `データ数(n)=${stats.n}, 相関係数(r)=${stats.r.toFixed(3)}`;
+            summaryStats.textContent = currentStatsSummary;
+
+
+            chartTitle.textContent = `${labelX} と ${labelY} の散布図`;
+            statsResults.innerHTML = `
+                <div class="p-3 bg-gray-100 rounded"><strong>データ数 (n):</strong> ${stats.n} 件</div>
+                <div class="p-3 bg-blue-100 rounded text-center">
+                    <span class="text-lg block">相関係数 (r)</span>
+                    <span class="text-4xl font-bold text-blue-700">${stats.r.toFixed(3)}</span>
+                </div>
+            `;
+            
+            // 2変数解釈ガイド (rの値に基づく)
+            const r = stats.r;
+            let strength = "";
+            let direction = "";
+            let interpretation = "";
+            let caution = "相関関係は因果関係を意味するとは限りません。"; // 共通の注意
+
+            if (r >= 0.7) {
+                strength = "強い";
+                direction = "正の相関";
+                interpretation = "一方が増加すると、もう一方も増加する傾向が「強い」ことを示します。";
+            } else if (r >= 0.4) {
+                strength = "中程度の";
+                direction = "正の相関";
+                interpretation = "一方が増加すると、もう一方も増加する傾向が「ある程度」見られます。";
+            } else if (r >= 0.2) {
+                strength = "弱い";
+                direction = "正の相関";
+                interpretation = "一方が増加すると、もう一方も増加する傾向が「わずかに」見られますが、関係性は弱いです。";
+            } else if (r > -0.2) {
+                strength = "ほとんど相関がない";
+                direction = "";
+                interpretation = "2つの変数の間には、直線的な関係は「ほとんどない」と考えられます。";
+                caution = "相関がないからといって、無関係であるとは断言できません（例：U字型の関係）。";
+            } else if (r > -0.4) {
+                strength = "弱い";
+                direction = "負の相関";
+                interpretation = "一方が増加すると、もう一方は減少する傾向が「わずかに」見られますが、関係性は弱いです。";
+            } else if (r > -0.7) {
+                strength = "中程度の";
+                direction = "負の相関";
+                interpretation = "一方が増加すると、もう一方は減少する傾向が「ある程度」見られます。";
+            } else {
+                strength = "強い";
+                direction = "負の相関";
+                interpretation = "一方が増加すると、もう一方は減少する傾向が「強い」ことを示します。";
+            }
+
+            interpretationGuide.innerHTML = `
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-700 flex items-center"><i data-lucide="ruler" class="w-5 h-5 mr-2 text-blue-500"></i> 数学的な表現</h4>
+                    <p class="text-gray-600">${strength}${direction}があると言えます。(r = ${r.toFixed(3)})</p>
+                </div>
+                <div class="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-700 flex items-center"><i data-lucide="book-open" class="w-5 h-5 mr-2 text-green-500"></i> 現実的な解釈</h4>
+                    <p class="text-gray-600">${interpretation}</p>
+                </div>
+                <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200 shadow-sm">
+                    <h4 class="font-semibold text-yellow-800 flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-2 text-yellow-600"></i> 解釈の注意点</h4>
+                    <p class="text-yellow-700">${caution} (例えば、「${labelX}」が「${labelY}」の「原因」であるとは、このグラフだけでは断定できません。)</p>
+                </div>
+            `;
+            lucide.createIcons();
+            
+            // 散布図を描画
+            const scatterData = x.map((val, index) => ({ x: val, y: y[index] }));
+            analysisChartInstance = new Chart(analysisChartCanvas, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: `${labelY} vs ${labelX}`,
+                        data: scatterData,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    // ★修正: 散布図の背景を白に設定
+                    backgroundColor: 'white',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { title: { display: true, text: labelX } },
+                        y: { title: { display: true, text: labelY } }
+                    }
+                }
+            });
+        }
+
+        // STEP 7 フォーム自動入力
+        function populateReportForm() {
+            // STEP 2 から仮説をセット
+            reportHypothesis.value = currentHypothesis;
+            
+            // STEP 1-5 のサマリーから手法をセット
+            let methodText = `使用データ: ${summaryDataset.textContent}\n`;
+            methodText += `分析手法: ${summaryMethod.textContent}\n`;
+            methodText += `X軸: ${summaryX.textContent}\n`;
+            if (selectedYKey) {
+                methodText += `Y軸: ${summaryY.textContent}\n`;
+            }
+            methodText += `データ処理: ${summaryOutlier.textContent}\n(欠損値 ${nullIndices.length}件は自動除外)`;
+            reportMethod.value = methodText;
+
+            // STEP 6 から分析結果をセット
+            reportAnalysis.value = currentStatsSummary;
+
+            // 課題設定と結論は空欄のまま
+            reportProblem.value = "";
+            reportConclusion.value = "";
+        }
+
+
+        // --- 初期化 ---
+        lucide.createIcons(); // Lucideアイコンの描画
+        populateDatasetCards(); // ★修正: STEP 1 のカードを構築
+        goToStep(0); // 最初のステップを表示
+
+    })();
+    </script>
+</body>
+</html>
